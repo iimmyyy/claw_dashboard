@@ -52,47 +52,6 @@ async function fetchFromGitHub(owner: string, repo: string, path: string): Promi
   return response.text();
 }
 
-// Parse markdown table to JSON (for future use)
-function parseMarkdownTable(markdown: string): any[] {
-  const lines = markdown.trim().split('\n');
-  const result: any[] = [];
-  
-  // Find table start and end
-  let inTable = false;
-  let headers: string[] = [];
-  
-  for (const line of lines) {
-    if (line.includes('|') && line.includes('---')) {
-      if (!inTable) {
-        inTable = true;
-        continue;
-      }
-      continue;
-    }
-    
-    if (line.includes('|')) {
-      const cells = line.split('|').filter(c => c.trim()).map(c => c.trim());
-      
-      if (!inTable && cells.length > 1) {
-        // First row might be headers
-        headers = cells;
-        inTable = true;
-      } else if (inTable && cells.length > 1) {
-        // Data row
-        const row: any = {};
-        cells.forEach((cell, index) => {
-          if (headers[index]) {
-            row[headers[index]] = cell;
-          }
-        });
-        result.push(row);
-      }
-    }
-  }
-  
-  return result;
-}
-
 function App() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
