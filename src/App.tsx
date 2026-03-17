@@ -52,7 +52,7 @@ async function fetchFromGitHub(owner: string, repo: string, path: string): Promi
   return response.text();
 }
 
-// Parse markdown table to JSON
+// Parse markdown table to JSON (for future use)
 function parseMarkdownTable(markdown: string): any[] {
   const lines = markdown.trim().split('\n');
   const result: any[] = [];
