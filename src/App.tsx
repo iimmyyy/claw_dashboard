@@ -1,37 +1,143 @@
 import { useState, useEffect } from 'react';
 
+interface FinanceData {
+  balance: number;
+  expenses: number;
+  income: number;
+}
+
+interface FuelEntry {
+  date: string;
+  mileage: number;
+  liters: number;
+  pricePerLiter: number;
+  total: number;
+}
+
+interface WorkoutEntry {
+  date: string;
+  strain: number;
+  recovery: number;
+  activity: string;
+}
+
 interface DashboardData {
   finance: {
-    im: any;
-    pim: any;
+    im: FinanceData;
+    pim: FinanceData;
   };
-  fuel: any;
-  workout: any;
+  fuel: {
+    entries: FuelEntry[];
+  };
+  workout: {
+    entries: WorkoutEntry[];
+  };
+}
+
+// GitHub API - fetch raw markdown file
+async function fetchFromGitHub(owner: string, repo: string, path: string): Promise<string> {
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/contents/${path}`,
+    {
+      headers: {
+        'Accept': 'application/vnd.github.v3.raw',
+      },
+    }
+  );
+  
+  if (!response.ok) {
+    throw new Error(`Failed to fetch ${path}`);
+  }
+  
+  return response.text();
+}
+
+// Parse markdown table to JSON
+function parseMarkdownTable(markdown: string): any[] {
+  const lines = markdown.trim().split('\n');
+  const result: any[] = [];
+  
+  // Find table start and end
+  let inTable = false;
+  let headers: string[] = [];
+  
+  for (const line of lines) {
+    if (line.includes('|') && line.includes('---')) {
+      if (!inTable) {
+        inTable = true;
+        continue;
+      }
+      continue;
+    }
+    
+    if (line.includes('|')) {
+      const cells = line.split('|').filter(c => c.trim()).map(c => c.trim());
+      
+      if (!inTable && cells.length > 1) {
+        // First row might be headers
+        headers = cells;
+        inTable = true;
+      } else if (inTable && cells.length > 1) {
+        // Data row
+        const row: any = {};
+        cells.forEach((cell, index) => {
+          if (headers[index]) {
+            row[headers[index]] = cell;
+          }
+        });
+        result.push(row);
+      }
+    }
+  }
+  
+  return result;
 }
 
 function App() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Fetch data from GitHub API
     const fetchData = async () => {
       try {
         const owner = 'iimmyyy';
         const repo = 'claw_dashboard';
         
-        // In real app, these would be separate files in the repo
-        // For now, we'll show placeholder
+        // Fetch all data files from GitHub
+        const [financeImContent, financePimContent] = await Promise.all([
+          fetchFromGitHub(owner, repo, 'finance-im.md').catch(() => ''),
+          fetchFromGitHub(owner, repo, 'finance-pim.md').catch(() => ''),
+        ]);
+        
+        // Parse finance data (simple regex for now)
+        const parseFinance = (content: string) => {
+          const balanceMatch = content.match(/ยอดคงเหลือ.*?฿([\d,.]+)/);
+          const expensesMatch = content.match(/รวมรายจ่าย.*?฿([\d,.]+)/);
+          const incomeMatch = content.match(/รายรับ.*?฿([\d,.]+)/);
+          
+          return {
+            balance: balanceMatch ? parseFloat(balanceMatch[1].replace(/,/g, '')) : 0,
+            expenses: expensesMatch ? parseFloat(expensesMatch[1].replace(/,/g, '')) : 0,
+            income: incomeMatch ? parseFloat(incomeMatch[1].replace(/,/g, '')) : 0,
+          };
+        };
+        
+        const imData = parseFinance(financeImContent);
+        const pimData = parseFinance(financePimContent);
+        
         setData({
           finance: {
-            im: { balance: 1573.51, expenses: 120 },
-            pim: { balance: 6029, expenses: 337 }
+            im: imData,
+            pim: pimData,
           },
           fuel: { entries: [] },
           workout: { entries: [] }
         });
-      } catch (error) {
-        console.error('Error fetching data:', error);
+        
+      } catch (err) {
+        console.error('Error fetching data:', err);
+        setError('Failed to load data');
       } finally {
         setLoading(false);
       }
@@ -47,6 +153,17 @@ function App() {
       </div>
     );
   }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-xl text-red-600">{error}</div>
+      </div>
+    );
+  }
+
+  const totalBalance = (data?.finance.im.balance || 0) + (data?.finance.pim.balance || 0);
+  const totalExpenses = (data?.finance.im.expenses || 0) + (data?.finance.pim.expenses || 0);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -76,7 +193,11 @@ function App() {
               <hr className="my-2" />
               <div className="flex justify-between">
                 <span className="text-gray-600">รวม:</span>
-                <span className="font-bold">฿{(data?.finance.im.balance + data?.finance.pim.balance).toLocaleString()}</span>
+                <span className="font-bold">฿{totalBalance.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">รายจ่าย:</span>
+                <span className="text-red-500">฿{totalExpenses.toLocaleString()}</span>
               </div>
             </div>
           </div>
